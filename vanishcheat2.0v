@@ -1,0 +1,970 @@
+
+-- Roblox Lua Cheat Script for Xeno Executor
+-- Supports all Roblox modes
+-- Features: Aimbot with FOV, NoClip (fly), FreeCam, GodMode, ESP with Boxes, Skeleton, Distance
+-- Beautiful 3-tab menu: Aimbot, Main, ESP
+-- No usage of Highlight object for ESP.
+
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+-- Drawing API availability check
+local Drawing = Drawing or {}
+
+-- UI Library basic setup
+local function create(className, props)
+    local obj = Instance.new(className)
+    if props then
+        for k,v in pairs(props) do
+            obj[k] = v
+        end
+    end
+    return obj
+end
+
+-- Main ScreenGui
+local ScreenGui = create("ScreenGui", {
+    Name = "XenoCheatMenu",
+    ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    Parent = game:GetService("CoreGui")
+})
+
+-- Main Frame
+local MainFrame = create("Frame", {
+    Parent = ScreenGui,
+    Size = UDim2.new(0, 460, 0, 350),
+    Position = UDim2.new(0.5, -230, 0.5, -175),
+    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+    BorderSizePixel = 0,
+    ClipsDescendants = true,
+})
+MainFrame.AnchorPoint = Vector2.new(0,0)
+MainFrame.BackgroundTransparency = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Name = "MainFrame"
+
+-- Shadow effect for card look
+local Shadow = create("ImageLabel", {
+    Parent = MainFrame,
+    Size = UDim2.new(1, 10, 1, 10),
+    Position = UDim2.new(0, -5, 0, -5),
+    BackgroundTransparency = 1,
+    Image = "rbxassetid://1316045217", -- subtle shadow png
+    ScaleType = Enum.ScaleType.Slice,
+    SliceCenter = Rect.new(10,10,118,118),
+    ZIndex = 0,
+})
+Shadow.AnchorPoint = Vector2.new(0,0)
+
+-- Title
+local Title = create("TextLabel", {
+    Parent = MainFrame,
+    Size = UDim2.new(1, 0, 0, 50),
+    BackgroundTransparency = 1,
+    Text = "Xeno Cheat Menu",
+    TextColor3 = Color3.fromRGB(30,30,30),
+    Font = Enum.Font.Poppins,
+    TextSize = 30,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    TextYAlignment = Enum.TextYAlignment.Center,
+})
+Title.Position = UDim2.new(0,0,0,0)
+
+-- Tabs container bar
+local TabsBar = create("Frame", {
+    Parent = MainFrame,
+    Size = UDim2.new(1, 0, 0, 40),
+    Position = UDim2.new(0, 0, 0, 50),
+    BackgroundColor3 = Color3.fromRGB(245,245,245),
+    BorderSizePixel = 0,
+})
+TabsBar.ZIndex = 2
+
+-- Tab Buttons helper
+local function createTabButton(name, parent)
+    local b = create("TextButton", {
+        Parent = parent,
+        Size = UDim2.new(0, 150, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        Text = name,
+        Font = Enum.Font.Poppins,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(100,100,100),
+    })
+    b.AutoButtonColor = false
+    b.Name = name.."Tab"
+    b.BackgroundTransparency = 0
+    return b
+end
+
+local tabs = {}
+tabs.Aimbot = createTabButton("Aimbot", TabsBar)
+tabs.Main = createTabButton("Main", TabsBar)
+tabs.ESP = createTabButton("ESP", TabsBar)
+
+-- Highlight active tab style
+local function setActiveTab(tabName)
+    for name, btn in pairs(tabs) do
+        if name == tabName then
+            btn.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+            btn.TextColor3 = Color3.fromRGB(30,30,30)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            btn.TextColor3 = Color3.fromRGB(100,100,100)
+        end
+    end
+end
+
+-- Content Frames for each tab
+local Contents = {}
+
+for _, name in ipairs({"Aimbot", "Main", "ESP"}) do
+    local frame = create("Frame", {
+        Parent = MainFrame,
+        Size = UDim2.new(1, -20, 1, -90),
+        Position = UDim2.new(0, 10, 0, 95),
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BorderSizePixel = 0,
+        Visible = false,
+    })
+    frame.Name = name.."Content"
+    frame.ClipsDescendants = true
+    Contents[name] = frame
+end
+
+setActiveTab("Aimbot")
+Contents.Aimbot.Visible = true
+
+-- Helper function for labels and toggles
+local function createLabel(text, parent, posY)
+    local label = create("TextLabel", {
+        Parent = parent,
+        Text = text,
+        Font = Enum.Font.Poppins,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(50,50,50),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, posY),
+        Size = UDim2.new(0, 200, 0, 25),
+    })
+    return label
+end
+
+local function createToggle(text, parent, posY, default, callback)
+    local container = create("Frame", {
+        Parent = parent,
+        Size = UDim2.new(0, 200, 0, 30),
+        Position = UDim2.new(0, 10, 0, posY),
+        BackgroundTransparency = 1,
+    })
+    local label = create("TextLabel", {
+        Parent = container,
+        Text = text,
+        Font = Enum.Font.Poppins,
+        TextSize = 17,
+        TextColor3 = Color3.fromRGB(40, 40, 40),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.75, 0, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    local toggle = create("TextButton", {
+        Parent = container,
+        Size = UDim2.new(0, 50, 0, 18),
+        Position = UDim2.new(0.78, 0, 0.15, 0),
+        BackgroundColor3 = default and Color3.fromRGB(0, 162, 255) or Color3.fromRGB(180, 180, 180),
+        Text = "",
+        BorderSizePixel = 0,
+        AutoButtonColor = true,
+        ClipsDescendants = true,
+        Name = "ToggleButton"
+    })
+    toggle.BackgroundTransparency = 0
+    toggle.ClipsDescendants = true
+
+    local innerCircle = create("Frame", {
+        Parent = toggle,
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = default and UDim2.new(1, -18, 0, 1) or UDim2.new(0, 2, 0,1),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Name = "InnerCircle"
+    })
+    innerCircle.AnchorPoint = Vector2.new(0,0)
+
+    toggle.MouseButton1Click:Connect(function()
+        local isOn = toggle.BackgroundColor3 == Color3.fromRGB(0, 162, 255)
+        if not isOn then
+            toggle.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+            innerCircle:TweenPosition(UDim2.new(1, -18, 0, 1), Enum.EasingDirection.Out,Enum.EasingStyle.Quad, 0.2, true)
+            if callback then callback(true) end
+        else
+            toggle.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+            innerCircle:TweenPosition(UDim2.new(0, 2, 0, 1), Enum.EasingDirection.Out,Enum.EasingStyle.Quad, 0.2, true)
+            if callback then callback(false) end
+        end
+    end)
+    return container, toggle
+end
+
+local function createSlider(text, parent, posY, min, max, default, callback)
+    local container = create("Frame", {
+        Parent = parent,
+        Size = UDim2.new(0, 250, 0, 40),
+        Position = UDim2.new(0, 10, 0, posY),
+        BackgroundTransparency = 1,
+    })
+    local label = create("TextLabel", {
+        Parent = container,
+        Text = text,
+        Font = Enum.Font.Poppins,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(40,40,40),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(0, 250, 0, 18),
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    local sliderFrame = create("Frame", {
+        Parent = container,
+        Size = UDim2.new(1, -20, 0, 12),
+        Position = UDim2.new(0, 0, 0, 20),
+        BackgroundColor3 = Color3.fromRGB(230, 230, 230),
+        ClipsDescendants = true,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0, 0.5),
+    })
+    sliderFrame.Position = UDim2.new(0, 0, 0, 30)
+    sliderFrame.ClipsDescendants = true
+    sliderFrame.BackgroundTransparency = 0
+    sliderFrame.BorderSizePixel = 0
+    sliderFrame.AnchorPoint = Vector2.new(0,0)
+
+    local fillBar = create("Frame", {
+        Parent = sliderFrame,
+        BackgroundColor3 = Color3.fromRGB(0, 162, 255),
+        Size = UDim2.new((default - min)/(max - min), 0, 1, 0),
+        BorderSizePixel = 0,
+    })
+
+    local knob = create("TextButton", {
+        Parent = sliderFrame,
+        Text = "",
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        Size = UDim2.new(0, 14, 1, 0),
+        Position = UDim2.new((default - min)/(max - min), 0, 0, 0),
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        ClipsDescendants = true,
+        Name = "Knob"
+    })
+
+    local dragging = false
+    knob.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local xPos = math.clamp(input.Position.X - sliderFrame.AbsolutePosition.X, 0, sliderFrame.AbsoluteSize.X)
+            local val = min + (xPos/sliderFrame.AbsoluteSize.X)*(max-min)
+            fillBar.Size = UDim2.new(xPos/sliderFrame.AbsoluteSize.X, 0, 1, 0)
+            knob.Position = UDim2.new(xPos/sliderFrame.AbsoluteSize.X, 0, 0, 0)
+            if callback then callback(val) end
+        end
+    end)
+
+    return container, function() return min + ((knob.Position.X.Offset) / sliderFrame.AbsoluteSize.X)*(max-min) end
+end
+
+-- Dropdown helper (for aiming body parts)
+local function createDropdown(text, parent, posY, options, defaultIndex, callback)
+    local container = create("Frame", {
+        Parent = parent,
+        Size = UDim2.new(0, 200, 0, 30),
+        Position = UDim2.new(0, 10, 0, posY),
+        BackgroundTransparency = 1,
+    })
+    local label = create("TextLabel", {
+        Parent = container,
+        Text = text,
+        Font = Enum.Font.Poppins,
+        TextSize = 16,
+        TextColor3 = Color3.fromRGB(40,40,40),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 3),
+        Size = UDim2.new(0.5, 0, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    local dropdown = create("TextButton", {
+        Parent = container,
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(0.48, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(245, 245, 245),
+        BorderSizePixel = 0,
+        TextColor3 = Color3.fromRGB(50,50,50),
+        Font = Enum.Font.Poppins,
+        TextSize = 15,
+        Text = options[defaultIndex],
+        AutoButtonColor = true,
+        ClipsDescendants = true,
+    })
+    dropdown.Name = "Dropdown"
+
+    local listFrame = create("Frame", {
+        Parent = container,
+        Size = UDim2.new(0, 120, 0, 0),
+        Position = UDim2.new(0.48, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(245, 245, 245),
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        ZIndex = 10,
+    })
+    listFrame.ClipsDescendants = true
+    listFrame.Visible = false
+
+    -- Build options
+    for i, option in ipairs(options) do
+        local optButton = create("TextButton", {
+            Parent = listFrame,
+            Size = UDim2.new(1, 0, 0, 25),
+            Position = UDim2.new(0, 0, 0, (i-1)*25),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = Color3.fromRGB(255,255,255),
+            BorderSizePixel = 0,
+            Text = option,
+            TextColor3 = Color3.fromRGB(50,50,50),
+            Font = Enum.Font.Poppins,
+            TextSize = 14,
+            AutoButtonColor = true,
+        })
+        optButton.MouseButton1Click:Connect(function()
+            dropdown.Text = option
+            listFrame.Visible = false
+            if callback then
+                callback(option)
+            end
+        end)
+    end
+
+    dropdown.MouseButton1Click:Connect(function()
+        listFrame.Visible = not listFrame.Visible
+        if listFrame.Visible then
+            listFrame.Size = UDim2.new(0, 120, 0, #options*25)
+        else
+            listFrame.Size = UDim2.new(0, 120, 0, 0)
+        end
+    end)
+
+    return container
+end
+
+-- Handle Tab switching
+do
+    local function showTab(name)
+        setActiveTab(name)
+        for tabName, content in pairs(Contents) do
+            content.Visible = (tabName == name)
+        end
+    end
+    tabs.Aimbot.MouseButton1Click:Connect(function() showTab("Aimbot") end)
+    tabs.Main.MouseButton1Click:Connect(function() showTab("Main") end)
+    tabs.ESP.MouseButton1Click:Connect(function() showTab("ESP") end)
+end
+
+-- VARIABLES FOR CHEAT FUNCTIONS
+
+-- Aimbot variables
+local AimbotEnabled = false
+local AimbotFov = 100
+local AimbotTargetPartName = "Head"
+local ShowAimbotFov = true
+
+-- NoClip variables
+local NoClipEnabled = false
+
+-- FreeCam variables
+local FreeCamEnabled = false
+local FreeCam = {
+    CameraSubject = Camera.CameraSubject,
+    CameraCFrame = Camera.CFrame,
+    Speed = 1,
+}
+
+-- GodMode variable
+local GodModeEnabled = false
+
+-- ESP variables
+local ESPEnabled = false
+local ESPBoxEnabled = false
+local ESPSkeletonEnabled = false
+local ESPDistanceEnabled = false
+
+-- Helper function for getting closest target within FOV
+local function getClosestPlayerWithinFOV(fov, targetPart)
+    local closestPlayer = nil
+    local closestMagnitude = math.huge
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+            local part = plr.Character:FindFirstChild(targetPart) or plr.Character:FindFirstChild("HumanoidRootPart")
+            if part then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                    local screenPos2 = Vector2.new(screenPos.X, screenPos.Y)
+                    local distance = (mousePos - screenPos2).Magnitude
+                    if distance < fov and distance < closestMagnitude then
+                        closestMagnitude = distance
+                        closestPlayer = plr
+                    end
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- Aimbot logic
+RunService.RenderStepped:Connect(function()
+    if AimbotEnabled then
+        local target = getClosestPlayerWithinFOV(AimbotFov, AimbotTargetPartName)
+        if target and target.Character and target.Character:FindFirstChild(AimbotTargetPartName) then
+            local targetPart = target.Character[AimbotTargetPartName]
+            if targetPart then
+                local camPos = Camera.CFrame.Position
+                local dir = (targetPart.Position - camPos).Unit
+                local newCameraCFrame = CFrame.new(camPos, targetPart.Position)
+                Camera.CFrame = Camera.CFrame:Lerp(newCameraCFrame, 0.20)
+            end
+        end
+    end
+end)
+
+-- Drawing Aimbot FOV circle using Drawing API if available, else GUI fallback
+local AimFovCircle
+local UseDrawing = false
+if Drawing and Drawing.new then
+    UseDrawing = true
+    AimFovCircle = Drawing.new("Circle")
+    AimFovCircle.Position = Vector2.new(Mouse.X, Mouse.Y)
+    AimFovCircle.Color = Color3.fromRGB(0, 162, 255)
+    AimFovCircle.Thickness = 2
+    AimFovCircle.NumSides = 100
+    AimFovCircle.Visible = ShowAimbotFov and AimbotEnabled
+end
+
+-- Update the FOV circle position and visibility every frame
+RunService.RenderStepped:Connect(function()
+    if UseDrawing then
+        AimFovCircle.Position = Vector2.new(Mouse.X, Mouse.Y)
+        AimFovCircle.Radius = AimbotFov
+        AimFovCircle.Visible = ShowAimbotFov and AimbotEnabled
+        AimFovCircle.Transparency = 1
+    end
+end)
+
+-- NOCLIP Implementation
+local function setNoClip(enabled)
+    NoClipEnabled = enabled
+    local character = LocalPlayer.Character
+    if not character then return end
+    for _, part in pairs(character:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.CanCollide = not enabled
+        end
+    end
+    if enabled then
+        -- Fly controls
+        local bodyVelocity = character.HumanoidRootPart:FindFirstChild("NoClipVelocity") or Instance.new("BodyVelocity")
+        bodyVelocity.Name = "NoClipVelocity"
+        bodyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
+        bodyVelocity.Parent = character.HumanoidRootPart
+        bodyVelocity.Velocity = Vector3.new(0,0,0)
+    else
+        if character.HumanoidRootPart:FindFirstChild("NoClipVelocity") then
+            character.HumanoidRootPart.NoClipVelocity:Destroy()
+        end
+    end
+end
+
+-- NoClip fly control variables
+local noClipDirection = Vector3.new()
+local noClipSpeed = 50
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.X then
+        setNoClip(not NoClipEnabled)
+    end
+end)
+
+-- Movement keys tracking for NoClip
+local moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown = false, false, false, false, false, false
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if NoClipEnabled then
+        if input.KeyCode == Enum.KeyCode.W then moveForward = true end
+        if input.KeyCode == Enum.KeyCode.S then moveBackward = true end
+        if input.KeyCode == Enum.KeyCode.A then moveLeft = true end
+        if input.KeyCode == Enum.KeyCode.D then moveRight = true end
+        if input.KeyCode == Enum.KeyCode.Space then moveUp = true end
+        if input.KeyCode == Enum.KeyCode.LeftControl then moveDown = true end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if NoClipEnabled then
+        if input.KeyCode == Enum.KeyCode.W then moveForward = false end
+        if input.KeyCode == Enum.KeyCode.S then moveBackward = false end
+        if input.KeyCode == Enum.KeyCode.A then moveLeft = false end
+        if input.KeyCode == Enum.KeyCode.D then moveRight = false end
+        if input.KeyCode == Enum.KeyCode.Space then moveUp = false end
+        if input.KeyCode == Enum.KeyCode.LeftControl then moveDown = false end
+    end
+end)
+
+RunService.Stepped:Connect(function()
+    if NoClipEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        local velocity = Vector3.new()
+        local camCF = workspace.CurrentCamera.CFrame
+
+        if moveForward then velocity = velocity + camCF.LookVector end
+        if moveBackward then velocity = velocity - camCF.LookVector end
+        if moveLeft then velocity = velocity - camCF.RightVector end
+        if moveRight then velocity = velocity + camCF.RightVector end
+        if moveUp then velocity = velocity + Vector3.new(0, 1, 0) end
+        if moveDown then velocity = velocity - Vector3.new(0, 1, 0) end
+
+        local bodyVelocity = hrp:FindFirstChild("NoClipVelocity")
+        if bodyVelocity then
+            bodyVelocity.Velocity = velocity.Unit * noClipSpeed
+        end
+    end
+end)
+
+
+-- FreeCam Implementation
+local freeCamSpeed = 2
+local camMoveDir = Vector3.new()
+local camMoveUp, camMoveDown = false, false
+
+local function setFreeCam(enabled)
+    FreeCamEnabled = enabled
+    local camera = workspace.CurrentCamera
+    if enabled then
+        FreeCam.CameraSubject = camera.CameraSubject
+        FreeCam.CameraCFrame = camera.CFrame
+
+        camera.CameraSubject = nil
+        camera.CFrame = FreeCam.CameraCFrame
+    else
+        camera.CameraSubject = FreeCam.CameraSubject
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.P then
+        setFreeCam(not FreeCamEnabled)
+    end
+    if FreeCamEnabled then
+        if input.KeyCode == Enum.KeyCode.W then camMoveDir = Vector3.new(camMoveDir.X, camMoveDir.Y, -1) end
+        if input.KeyCode == Enum.KeyCode.S then camMoveDir = Vector3.new(camMoveDir.X, camMoveDir.Y, 1) end
+        if input.KeyCode == Enum.KeyCode.A then camMoveDir = Vector3.new(-1, camMoveDir.Y, camMoveDir.Z) end
+        if input.KeyCode == Enum.KeyCode.D then camMoveDir = Vector3.new(1, camMoveDir.Y, camMoveDir.Z) end
+        if input.KeyCode == Enum.KeyCode.Space then camMoveUp = true end
+        if input.KeyCode == Enum.KeyCode.LeftControl then camMoveDown = true end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if FreeCamEnabled then
+        if input.KeyCode == Enum.KeyCode.W then camMoveDir = Vector3.new(camMoveDir.X, camMoveDir.Y, 0) end
+        if input.KeyCode == Enum.KeyCode.S then camMoveDir = Vector3.new(camMoveDir.X, camMoveDir.Y, 0) end
+        if input.KeyCode == Enum.KeyCode.A then camMoveDir = Vector3.new(0, camMoveDir.Y, camMoveDir.Z) end
+        if input.KeyCode == Enum.KeyCode.D then camMoveDir = Vector3.new(0, camMoveDir.Y, camMoveDir.Z) end
+        if input.KeyCode == Enum.KeyCode.Space then camMoveUp = false end
+        if input.KeyCode == Enum.KeyCode.LeftControl then camMoveDown = false end
+    end
+end)
+
+RunService.RenderStepped:Connect(function(delta)
+    if FreeCamEnabled then
+        local cam = workspace.CurrentCamera
+        local forward = cam.CFrame.LookVector
+        local right = cam.CFrame.RightVector
+        local up = Vector3.new(0, 1, 0)
+        local moveDir = Vector3.new(0,0,0)
+        if camMoveDir.Z ~= 0 then
+            moveDir = moveDir + forward * camMoveDir.Z
+        end
+        if camMoveDir.X ~= 0 then
+            moveDir = moveDir + right * camMoveDir.X
+        end
+        if camMoveUp then
+            moveDir = moveDir + up
+        end
+        if camMoveDown then
+            moveDir = moveDir - up
+        end
+
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit * freeCamSpeed
+            cam.CFrame = cam.CFrame + moveDir
+            FreeCam.CameraCFrame = cam.CFrame
+        end
+    end
+end)
+
+-- GodMode Implementation: set Humanoid.Health to Humanoid.MaxHealth and disable humanoid state changes
+local function setGodMode(enabled)
+    GodModeEnabled = enabled
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if enabled then
+                hum.MaxHealth = math.huge
+                hum.Health = hum.MaxHealth
+                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                hum.HealthChanged:Connect(function()
+                    if hum.Health < hum.MaxHealth then
+                        hum.Health = hum.MaxHealth
+                    end
+                end)
+            else
+                hum.MaxHealth = 100
+            end
+        end
+    end
+end
+
+-- ESP Setup:
+
+-- Table to store ESP objects keyed by Player
+local ESPObjects = {}
+
+-- Draw box around the player using GUI Frames positioned on screen
+local function createESPBox()
+    local box = {}
+    box.OuterFrame = create("Frame", {
+        BackgroundTransparency = 0.4,
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromRGB(0, 162, 255),
+        ZIndex = 5,
+        Visible = false,
+    })
+    box.Top = create("Frame", {
+        Parent = box.OuterFrame,
+        BackgroundColor3 = Color3.fromRGB(0, 162, 255),
+        Size = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, 0, 0, 0),
+        BorderSizePixel = 0,
+    })
+    box.Bottom = create("Frame", {
+        Parent = box.OuterFrame,
+        BackgroundColor3 = Color3.fromRGB(0, 162, 255),
+        Size = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, 0, 1, -2),
+        BorderSizePixel = 0,
+    })
+    box.Left = create("Frame", {
+        Parent = box.OuterFrame,
+        BackgroundColor3 = Color3.fromRGB(0, 162, 255),
+        Size = UDim2.new(0, 2, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BorderSizePixel = 0,
+    })
+    box.Right = create("Frame", {
+        Parent = box.OuterFrame,
+        BackgroundColor3 = Color3.fromRGB(0, 162, 255),
+        Size = UDim2.new(0, 2, 1, 0),
+        Position = UDim2.new(1, -2, 0, 0),
+        BorderSizePixel = 0,
+    })
+    box.TextLabel = create("TextLabel", {
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Poppins,
+        TextSize = 14,
+        TextColor3 = Color3.fromRGB(30,30,30),
+        TextStrokeTransparency = 0.7,
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 0, -5),
+        Size = UDim2.new(0, 100, 0, 20),
+        Visible = false,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    return box
+end
+
+-- Draw skeleton using Drawing lines
+local SkeletonLines = {}
+
+local function clearSkeleton()
+    for _, line in pairs(SkeletonLines) do
+        line.Visible = false
+        line:Remove()
+    end
+    SkeletonLines = {}
+end
+
+local function drawLine(from, to, color)
+    local line = Drawing.new("Line")
+    line.From = from
+    line.To = to
+    line.Color = color or Color3.fromRGB(0, 162, 255)
+    line.Thickness = 2
+    line.Transparency = 1
+    line.Visible = true
+    table.insert(SkeletonLines, line)
+end
+
+-- Bones connections, relative parts
+local bonePairs = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"},
+}
+
+-- Shows skeleton of player on screen using Drawing lines
+local function updateSkeletonESP(player)
+    local char = player.Character
+    if not char then return end
+    for _, pair in pairs(bonePairs) do
+        local p1 = char:FindFirstChild(pair[1])
+        local p2 = char:FindFirstChild(pair[2])
+        if p1 and p2 then
+            local p1Pos, p1OnScreen = Camera:WorldToViewportPoint(p1.Position)
+            local p2Pos, p2OnScreen = Camera:WorldToViewportPoint(p2.Position)
+            if p1OnScreen and p2OnScreen then
+                drawLine(Vector2.new(p1Pos.X, p1Pos.Y), Vector2.new(p2Pos.X, p2Pos.Y))
+            end
+        end
+    end
+end
+
+-- Update ESP per frame
+RunService.RenderStepped:Connect(function()
+    if ESPEnabled then
+        -- Clear previous skeleton lines so they update properly
+        clearSkeleton()
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChildOfClass("Humanoid") and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+                local hrp = player.Character.HumanoidRootPart
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                local rootPos, inView = Camera:WorldToViewportPoint(hrp.Position)
+                if inView then
+                    -- Draw Box
+                    if ESPBoxEnabled then
+                        if not ESPObjects[player] then
+                            ESPObjects[player] = createESPBox()
+                            for _, frame in pairs({ESPObjects[player].OuterFrame, ESPObjects[player].Top, ESPObjects[player].Bottom, ESPObjects[player].Left, ESPObjects[player].Right, ESPObjects[player].TextLabel}) do
+                                frame.Parent = MainFrame
+                            end
+                        end
+                        local box = ESPObjects[player]
+                        local head = player.Character:FindFirstChild("Head")
+                        if head then
+                            local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position)
+                            local rootPos2, rootOnScreen = Camera:WorldToViewportPoint(hrp.Position)
+                            if headOnScreen and rootOnScreen then
+                                local height = math.abs(headPos.Y - rootPos2.Y)
+                                local width = height * 0.5
+                                local left = rootPos2.X - width/2
+                                local top = headPos.Y
+                                box.OuterFrame.Size = UDim2.new(0, width, 0, height)
+                                box.OuterFrame.Position = UDim2.new(0, left, 0, top)
+                                box.OuterFrame.Visible = true
+                                if ESPDistanceEnabled and humanoid then
+                                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
+                                    box.TextLabel.Text = string.format("%s\n%.0f studs", player.Name, dist)
+                                    box.TextLabel.Visible = true
+                                else
+                                    box.TextLabel.Visible = false
+                                end
+                            else
+                                box.OuterFrame.Visible = false
+                                box.TextLabel.Visible = false
+                            end
+                        else
+                            box.OuterFrame.Visible = false
+                            box.TextLabel.Visible = false
+                        end
+                    else
+                        if ESPObjects[player] then
+                            ESPObjects[player].OuterFrame.Visible = false
+                            ESPObjects[player].TextLabel.Visible = false
+                        end
+                    end
+
+                    -- Draw Skeleton
+                    if ESPSkeletonEnabled then
+                        updateSkeletonESP(player)
+                    end
+                else
+                    if ESPObjects[player] then
+                        ESPObjects[player].OuterFrame.Visible = false
+                        ESPObjects[player].TextLabel.Visible = false
+                    end
+                end
+            else
+                if ESPObjects[player] then
+                    ESPObjects[player].OuterFrame.Visible = false
+                    ESPObjects[player].TextLabel.Visible = false
+                end
+            end
+        end
+    else
+        -- Disable all ESP visuals
+        clearSkeleton()
+        for _, esp in pairs(ESPObjects) do
+            esp.OuterFrame.Visible = false
+            esp.TextLabel.Visible = false
+        end
+    end
+end)
+
+-- MENU COMPONENTS SETUP
+
+-- Aimbot tab components
+local AimbotToggleFrame, AimbotToggle = createToggle("Enable Aimbot", Contents.Aimbot, 10, AimbotEnabled, function(state)
+    AimbotEnabled = state
+    if UseDrawing then
+        AimFovCircle.Visible = ShowAimbotFov and state
+    end
+end)
+
+local FOVCircleToggleFrame, FOVCircleToggle = createToggle("Show Aimbot FOV", Contents.Aimbot, 50, ShowAimbotFov, function(state)
+    ShowAimbotFov = state
+    if UseDrawing then
+        AimFovCircle.Visible = AimbotEnabled and ShowAimbotFov
+    end
+end)
+
+local FOVSliderFrame, FOVSliderGetter = createSlider("Aimbot FOV", Contents.Aimbot, 90, 30, 300, AimbotFov, function(val)
+    AimbotFov = val
+end)
+
+local targetParts = {"Head", "UpperTorso", "Neck", "LeftFoot"}
+local humanReadableParts = {
+    Head = "Head",
+    UpperTorso = "Body",
+    Neck = "Neck",
+    LeftFoot = "Legs"
+}
+local dropdown = createDropdown("Aim Target Part", Contents.Aimbot, 130, {"Head","Body","Neck","LeftFoot"}, 1, function(option)
+    if option == "Body" then
+        AimbotTargetPartName = "UpperTorso"
+    else
+        AimbotTargetPartName = option
+    end
+end)
+
+-- Main tab components
+
+local NoClipToggleFrame, NoClipToggle = createToggle("NoClip (Fly) [Key: X]", Contents.Main, 10, NoClipEnabled, function(state)
+    setNoClip(state)
+end)
+
+local FreeCamToggleFrame, FreeCamToggle = createToggle("FreeCam [Key: P]", Contents.Main, 50, FreeCamEnabled, function(state)
+    setFreeCam(state)
+end)
+
+local GodModeToggleFrame, GodModeToggle = createToggle("GodMode", Contents.Main, 90, GodModeEnabled, function(state)
+    setGodMode(state)
+end)
+
+-- ESP tab components
+
+local ESPToggleFrame, ESPToggle = createToggle("Enable Wallhack ESP", Contents.ESP, 10, ESPEnabled, function(state)
+    ESPEnabled = state
+end)
+
+local ESPBoxToggleFrame, ESPBoxToggle = createToggle("Box ESP", Contents.ESP, 50, ESPBoxEnabled, function(state)
+    ESPBoxEnabled = state
+end)
+
+local ESPDistanceToggleFrame, ESPDistanceToggle = createToggle("Distance Display", Contents.ESP, 90, ESPDistanceEnabled, function(state)
+    ESPDistanceEnabled = state
+end)
+
+local ESPSkeletonToggleFrame, ESPSkeletonToggle = createToggle("Skeleton ESP", Contents.ESP, 130, ESPSkeletonEnabled, function(state)
+    ESPSkeletonEnabled = state
+end)
+
+-- Update ESP toggles states on change
+ESPToggle.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    if not ESPEnabled then
+        -- disable all ESP options
+        ESPBoxToggle.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        ESPBoxToggle:FindFirstChild("InnerCircle").Position = UDim2.new(0, 2, 0, 1)
+        ESPBoxEnabled = false
+        ESPSkeletonToggle.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        ESPSkeletonToggle:FindFirstChild("InnerCircle").Position = UDim2.new(0, 2, 0, 1)
+        ESPSkeletonEnabled = false
+        ESPDistanceToggle.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        ESPDistanceToggle:FindFirstChild("InnerCircle").Position = UDim2.new(0, 2, 0, 1)
+        ESPDistanceEnabled = false
+    else
+        -- enable ESPBox toggle by default for convenience
+        ESPBoxToggle.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        ESPBoxToggle:FindFirstChild("InnerCircle"):TweenPosition(UDim2.new(1, -18, 0, 1), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.2, true)
+        ESPBoxEnabled = true
+    end
+end)
+
+-- Add finally a close button
+local CloseButton = create("TextButton", {
+    Parent = MainFrame,
+    Size = UDim2.new(0, 30, 0, 30),
+    Position = UDim2.new(1, -35, 0, 10),
+    BackgroundColor3 = Color3.fromRGB(220, 220, 220),
+    Text = "X",
+    Font = Enum.Font.Poppins,
+    TextSize = 18,
+    TextColor3 = Color3.fromRGB(80,80,80),
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+})
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+    if UseDrawing and AimFovCircle then
+        AimFovCircle:Remove()
+    end
+    clearSkeleton()
+end)
+
+return ScreenGui -- To prevent script from garbage collection or for potential further use
